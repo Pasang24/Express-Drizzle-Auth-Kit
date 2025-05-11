@@ -48,4 +48,27 @@ const emailLogin = async (
   res.json({ user: currentUser });
 };
 
-export const authController = { emailLogin };
+const googleLogin = async (req: Request, res: Response) => {
+  const redirectUrl =
+    "https://accounts.google.com/o/oauth2/v2/auth?" +
+    new URLSearchParams({
+      client_id: process.env.GOOGLE_CLIENT_ID as string,
+      redirect_uri: "http://localhost:4000/auth/google/callback",
+      response_type: "code",
+      scope: "email profile",
+    });
+
+  res.redirect(redirectUrl);
+};
+
+const googleLoginCallback = async (
+  req: Request<{}, {}, {}, { code: string }>,
+  res: Response
+) => {
+  const { code } = req.query;
+  console.log(code);
+
+  res.send("Code received");
+};
+
+export const authController = { emailLogin, googleLogin, googleLoginCallback };
