@@ -1,6 +1,6 @@
 import { pgTable, varchar, uuid, timestamp, pgEnum } from "drizzle-orm/pg-core";
 
-const providerEnum = pgEnum("provider", ["email", "google", "github"]);
+export const providerEnum = pgEnum("provider", ["email", "google", "github"]);
 
 export const user = pgTable("user", {
   id: uuid("id").primaryKey().defaultRandom(),
