@@ -153,12 +153,17 @@ const gitHubLogin = async (req: Request, res: Response) => {
 };
 
 const gitHubLoginCallback = async (
-  req: Request<{}, {}, {}, { code: string }>,
+  req: Request<{}, {}, {}, { code?: string; error?: string }>,
   res: Response,
   next: NextFunction
 ) => {
   try {
-    const { code } = req.query;
+    const { code, error } = req.query;
+
+    if (error) {
+      res.redirect(`${process.env.FRONTEND_URL}/login`);
+      return;
+    }
 
     if (!code) {
       throw new ApiError(400, "Missing Authorization Code");
