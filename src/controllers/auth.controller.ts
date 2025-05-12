@@ -1,36 +1,15 @@
 import { NextFunction, Request, Response } from "express";
-import bcrypt from "bcrypt";
+import { GoogleProfile, GoogleToken } from "../types/google";
+import { GitHubProfile, GitHubEmail, GitHubToken } from "../types/github";
 import { ApiError } from "../utils/ApiError";
 import { generateSession } from "../utils/generateSession";
 import { user } from "../db/schema/user";
 import { and, eq } from "drizzle-orm";
+import bcrypt from "bcrypt";
 import db from "../db";
 
-type User = typeof user.$inferSelect;
-type TokenData = {
-  access_token: string;
-  expires_in: number;
-  scope: string;
-  token_type: string;
-  id_token: string;
-};
-
-type GitHubProfile = {
-  login: string;
-  name: string | null;
-  email: string | null;
-  avatar_url: string;
-};
-
-type GitHubEmail = {
-  email: string;
-  primary: boolean;
-  verified: boolean;
-  visibility: "public" | "private" | null;
-};
-
 const emailLogin = async (
-  req: Request<{}, {}, Pick<User, "email" | "password">, {}>,
+  req: Request<{}, {}, { email: string; password: string }, {}>,
   res: Response,
   next: NextFunction
 ) => {
@@ -49,7 +28,7 @@ const emailLogin = async (
     }
 
     const isPasswordMatch = await bcrypt.compare(
-      password as string,
+      password,
       currentUser.password as string
     );
 
@@ -61,7 +40,7 @@ const emailLogin = async (
 
     const { password: _, ...safeUser } = currentUser;
 
-    res.json({ user: safeUser });
+    res.json(safeUser);
   } catch (error) {
     next(error);
   }
@@ -111,12 +90,12 @@ const googleLoginCallback = async (
       }),
     });
 
-    if (!tokenRes.ok) {
-      // const errorData = await tokenRes.json();
+    const tokenData: GoogleToken = await tokenRes.json();
+
+    if (!tokenRes.ok || "error" in tokenData) {
       throw new ApiError(400, "Invalid or expired code");
     }
 
-    const tokenData: TokenData = await tokenRes.json();
     const accessToken = tokenData.access_token;
 
     const profileRes = await fetch(
@@ -128,7 +107,7 @@ const googleLoginCallback = async (
       }
     );
 
-    const profile: Pick<User, "email" | "name"> = await profileRes.json();
+    const profile: GoogleProfile = await profileRes.json();
 
     const result = await db
       .insert(user)
@@ -160,7 +139,7 @@ const googleLoginCallback = async (
   }
 };
 
-const gitHubLogin = async (req: Request, res: Response, next: NextFunction) => {
+const gitHubLogin = async (req: Request, res: Response) => {
   const redirectUrl =
     "https://github.com/login/oauth/authorize?" +
     new URLSearchParams({
@@ -202,10 +181,10 @@ const gitHubLoginCallback = async (
       }
     );
 
-    const tokenData = await tokenRes.json();
+    const tokenData: GitHubToken = await tokenRes.json();
 
-    if ("error" in tokenData) {
-      throw new ApiError(400, tokenData.error_description);
+    if (!tokenRes.ok || "error" in tokenData) {
+      throw new ApiError(400, "Invalid or expired code");
     }
 
     const accessToken = tokenData.access_token;
@@ -238,7 +217,7 @@ const gitHubLoginCallback = async (
       .insert(user)
       .values({
         email: profile.email as string,
-        name: profile.name || profile.login,
+        name: profile.name ?? profile.login,
         provider: "github",
       })
       .onConflictDoNothing({ target: [user.email, user.provider] })
