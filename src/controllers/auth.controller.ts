@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
+import { generateSession } from "../utils/generateSession";
 import { user } from "../db/schema/user";
 import { and, eq } from "drizzle-orm";
 import db from "../db";
@@ -41,10 +41,7 @@ const emailLogin = async (
     return;
   }
 
-  const sessionToken = jwt.sign(
-    { id: currentUser.id },
-    process.env.JWT_SECRET as jwt.Secret
-  );
+  const sessionToken = generateSession(currentUser.id);
 
   res.cookie("session", sessionToken, {
     httpOnly: true,
@@ -58,11 +55,12 @@ const emailLogin = async (
 };
 
 const googleLogin = async (req: Request, res: Response) => {
+  console.log(process.env.BACKEND_URL);
   const redirectUrl =
     "https://accounts.google.com/o/oauth2/v2/auth?" +
     new URLSearchParams({
       client_id: process.env.GOOGLE_CLIENT_ID as string,
-      redirect_uri: "http://localhost:4000/auth/google/callback",
+      redirect_uri: `${process.env.BACKEND_URL}/auth/google/callback`,
       response_type: "code",
       scope: "email profile",
     });
@@ -83,7 +81,7 @@ const googleLoginCallback = async (
       code,
       client_id: process.env.GOOGLE_CLIENT_ID as string,
       client_secret: process.env.GOOGLE_CLIENT_SECRET as string,
-      redirect_uri: "http://localhost:4000/auth/google/callback",
+      redirect_uri: `${process.env.BACKEND_URL}/auth/google/callback`,
       grant_type: "authorization_code",
     }),
   });
@@ -122,10 +120,7 @@ const googleLoginCallback = async (
 
     currentUser = response[0];
 
-    const sessionToken = jwt.sign(
-      { id: currentUser.id },
-      process.env.JWT_SECRET as jwt.Secret
-    );
+    const sessionToken = generateSession(currentUser.id);
 
     res.cookie("session", sessionToken, {
       httpOnly: true,
@@ -136,7 +131,7 @@ const googleLoginCallback = async (
     console.log(currentUser);
 
     // replace the redirect url with your frontend url
-    res.redirect("http://localhost:3000");
+    res.redirect(`${process.env.FRONTEND_URL}`);
   }
 };
 
