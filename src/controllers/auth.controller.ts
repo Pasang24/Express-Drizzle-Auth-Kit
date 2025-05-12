@@ -41,21 +41,14 @@ const emailLogin = async (
     return;
   }
 
-  const sessionToken = generateSession(currentUser.id);
-
-  res.cookie("session", sessionToken, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-  });
+  generateSession(res, currentUser.id);
 
   const { password: _, ...safeUser } = currentUser;
 
-  res.json(safeUser);
+  res.json({ user: safeUser });
 };
 
 const googleLogin = async (req: Request, res: Response) => {
-  console.log(process.env.BACKEND_URL);
   const redirectUrl =
     "https://accounts.google.com/o/oauth2/v2/auth?" +
     new URLSearchParams({
@@ -74,6 +67,13 @@ const googleLoginCallback = async (
 ) => {
   const { code } = req.query;
 
+  // if the user tries to access the callback route directly without getting redirected
+  // we will not have code in the request query so we return it as a bad request
+  if (!code) {
+    res.status(400).json({ message: "Missing authorization code" });
+    return;
+  }
+
   const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -85,6 +85,13 @@ const googleLoginCallback = async (
       grant_type: "authorization_code",
     }),
   });
+
+  if (!tokenRes.ok) {
+    const errorData = await tokenRes.json();
+    console.log(errorData);
+    res.status(400).json({ message: "Invalid or expired code" });
+    return;
+  }
 
   const tokenData: TokenData = await tokenRes.json();
   const accessToken = tokenData.access_token;
@@ -120,15 +127,7 @@ const googleLoginCallback = async (
 
     currentUser = response[0];
 
-    const sessionToken = generateSession(currentUser.id);
-
-    res.cookie("session", sessionToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-    });
-
-    console.log(currentUser);
+    generateSession(res, currentUser.id);
 
     // replace the redirect url with your frontend url
     res.redirect(`${process.env.FRONTEND_URL}`);
